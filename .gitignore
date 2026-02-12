@@ -39,3 +39,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# debug and logs
+debug_output.txt
+debug_output_extra.txt
+debug_output_final.txt
+plan.md
+everything-claude-code/
+*.webp
+*.png
