@@ -5,7 +5,7 @@ import { Property, DashboardStats } from "@/lib/types";
 
 // --- Helpers (pure, testable) ---
 
-function deduplicateById(data: Property[]): Property[] {
+export function deduplicateById(data: Property[]): Property[] {
     const seen = new Set<string>();
     return data.filter((p) => {
         if (seen.has(p.id)) return false;
@@ -14,7 +14,7 @@ function deduplicateById(data: Property[]): Property[] {
     });
 }
 
-function calculateMedian(sorted: number[]): number {
+export function calculateMedian(sorted: number[]): number {
     const len = sorted.length;
     if (len === 0) return 0;
     const mid = Math.floor(len / 2);
@@ -22,7 +22,7 @@ function calculateMedian(sorted: number[]): number {
     return (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-function calculateStats(properties: Property[]): DashboardStats {
+export function calculateStats(properties: Property[]): DashboardStats {
     const validProps = properties.filter((p) => p.price > 0);
     const total = validProps.length;
 
@@ -30,25 +30,32 @@ function calculateStats(properties: Property[]): DashboardStats {
         return { totalProperties: 0, avgPrice: 0, medianPrice: 0, opportunities: 0, avgDaysOnMarket: 0, totalValue: 0 };
     }
 
-    const totalPrice = validProps.reduce((sum, p) => sum + p.price, 0);
-    const avgPrice = totalPrice / total;
+    // Single pass to accumulate totals
+    let totalPrice = 0;
+    let totalPps = 0;
+    let totalDom = 0;
+    const prices: number[] = [];
 
-    const sortedPrices = validProps.map((p) => p.price).sort((a, b) => a - b);
-    const medianPrice = calculateMedian(sortedPrices);
+    for (const p of validProps) {
+        totalPrice += p.price;
+        totalPps += p.price_per_sqft || 0;
+        totalDom += p.days_on_mls || 0;
+        prices.push(p.price);
+    }
 
-    const avgPps = validProps.reduce((sum, p) => sum + (p.price_per_sqft || 0), 0) / total;
+    prices.sort((a, b) => a - b);
+
+    const avgPps = totalPps / total;
     const opportunities = validProps.filter(
         (p) => p.price_per_sqft > 0 && p.price_per_sqft < avgPps * 0.8
     ).length;
 
-    const avgDom = validProps.reduce((sum, p) => sum + (p.days_on_mls || 0), 0) / total;
-
     return {
         totalProperties: total,
-        avgPrice,
-        medianPrice,
+        avgPrice: totalPrice / total,
+        medianPrice: calculateMedian(prices),
         opportunities,
-        avgDaysOnMarket: Math.round(avgDom),
+        avgDaysOnMarket: Math.round(totalDom / total),
         totalValue: totalPrice,
     };
 }

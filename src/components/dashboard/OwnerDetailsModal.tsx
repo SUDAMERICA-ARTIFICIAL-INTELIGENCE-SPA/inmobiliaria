@@ -1,14 +1,14 @@
 "use client";
 
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Property, OwnerInfo } from "@/lib/types";
 import { generateOwnerInfo } from "@/lib/mock-owners";
-import { useState, useEffect } from "react";
+import { useReducer, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-    Search, Building2, Calendar, DollarSign,
+    Search, Building2, DollarSign,
     Contact, Mail, Phone, MapPin,
 } from "lucide-react";
 
@@ -34,33 +34,59 @@ const RISK_STYLES: Record<string, string> = {
 
 // --- Hooks ---
 
+interface SearchState {
+    loading: boolean;
+    progress: number;
+    searchStep: number;
+    ownerData: OwnerInfo | null;
+}
+
+type SearchAction =
+    | { type: "RESET" }
+    | { type: "TICK_PROGRESS" }
+    | { type: "TICK_STEP" }
+    | { type: "COMPLETE"; ownerData: OwnerInfo };
+
+const initialSearchState: SearchState = {
+    loading: true,
+    progress: 0,
+    searchStep: 0,
+    ownerData: null,
+};
+
+function searchReducer(state: SearchState, action: SearchAction): SearchState {
+    switch (action.type) {
+        case "RESET":
+            return initialSearchState;
+        case "TICK_PROGRESS":
+            return { ...state, progress: Math.min(state.progress + 2, 100) };
+        case "TICK_STEP":
+            return { ...state, searchStep: Math.min(state.searchStep + 1, SEARCH_STEPS.length - 1) };
+        case "COMPLETE":
+            return { ...state, loading: false, ownerData: action.ownerData };
+    }
+}
+
 function useSimulatedSearch(isOpen: boolean, property: Property | null) {
-    const [loading, setLoading] = useState(true);
-    const [progress, setProgress] = useState(0);
-    const [searchStep, setSearchStep] = useState(0);
-    const [ownerData, setOwnerData] = useState<OwnerInfo | null>(null);
+    const [state, dispatch] = useReducer(searchReducer, initialSearchState);
+
+    const reset = useCallback(() => dispatch({ type: "RESET" }), []);
 
     useEffect(() => {
         if (!isOpen || !property) return;
 
-        setLoading(true);
-        setProgress(0);
-        setSearchStep(0);
+        reset();
 
         const progressInterval = setInterval(() => {
-            setProgress((prev) => {
-                if (prev >= 100) { clearInterval(progressInterval); return 100; }
-                return prev + 2;
-            });
+            dispatch({ type: "TICK_PROGRESS" });
         }, PROGRESS_INTERVAL_MS);
 
         const stepInterval = setInterval(() => {
-            setSearchStep((prev) => Math.min(prev + 1, SEARCH_STEPS.length - 1));
+            dispatch({ type: "TICK_STEP" });
         }, STEP_INTERVAL_MS);
 
         const timeout = setTimeout(() => {
-            setOwnerData(generateOwnerInfo(property));
-            setLoading(false);
+            dispatch({ type: "COMPLETE", ownerData: generateOwnerInfo(property) });
         }, LOADING_DURATION_MS);
 
         return () => {
@@ -68,9 +94,9 @@ function useSimulatedSearch(isOpen: boolean, property: Property | null) {
             clearInterval(stepInterval);
             clearTimeout(timeout);
         };
-    }, [isOpen, property]);
+    }, [isOpen, property, reset]);
 
-    return { loading, progress, searchStep, ownerData };
+    return state;
 }
 
 // --- Sub-components ---
@@ -247,7 +273,8 @@ export function OwnerDetailsModal({ property, isOpen, onClose }: OwnerDetailsMod
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="glass-card border-[#00F0FF]/30 text-white max-w-2xl overflow-hidden neon-border">
+            <DialogContent className="glass-card border-[#00F0FF]/30 text-white max-w-2xl overflow-hidden neon-border" aria-describedby={undefined}>
+                <DialogTitle className="sr-only">Owner Analysis</DialogTitle>
                 <AnimatePresence mode="wait">
                     {loading ? (
                         <LoadingState progress={progress} searchStep={searchStep} />

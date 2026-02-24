@@ -1,0 +1,20 @@
+﻿{
+  "_comment": "ArgusLLM project config. Override global defaults here.",
+    "project": {
+    "language": "javascript",
+    "srcDir": "src",
+    "testDir": "src"
+  },
+  "goalLoop": {
+    "maxIterations": 5
+  },
+  "pipeline": {
+    "levels": [
+      { "level": 1, "name": "Strategy", "agents": ["project-manager"] },
+      { "level": 2, "name": "Architecture", "agents": ["tech-lead"] },
+      { "level": 3, "name": "Implementation", "agents": ["dev-backend", "dev-frontend"] },
+      { "level": 4, "name": "Integration", "agents": ["fullstack"] },
+      { "level": 5, "name": "Verification", "agents": ["qa-sentinel"] }
+    ]
+  }
+}

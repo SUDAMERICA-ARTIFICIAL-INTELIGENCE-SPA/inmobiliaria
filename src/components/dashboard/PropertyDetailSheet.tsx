@@ -7,57 +7,16 @@ import {
     SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Property } from "@/lib/types";
+import { Property, OwnerInfo } from "@/lib/types";
+import { formatPrice, isSafeUrl, calculateBaths } from "@/lib/utils";
+import { generateOwnerInfo } from "@/lib/mock-owners";
 import { useState, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
+import Image from "next/image";
 import {
     Bed, Bath, Ruler, Calendar, MapPin, Building2,
     ExternalLink, Lock, Phone, Mail, Shield, User,
 } from "lucide-react";
-
-// --- Helpers ---
-
-function formatPrice(value: number): string {
-    return `US$ ${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-}
-
-const LLC_NAMES = [
-    "Miami Beach Holdings LLC", "Sunshine State Properties LLC",
-    "Coral Gables Investment Group LLC", "Biscayne Bay Capital LLC",
-    "South Florida Realty Trust", "Palm Grove Investments LLC",
-    "Ocean Drive Holdings Corp", "Dade County Properties LLC",
-    "Key Biscayne Ventures LLC", "Brickell Capital Partners LLC",
-    "Coconut Grove Estates LLC", "Flagler Street Holdings LLC",
-    "Wynwood Investment Group LLC", "Design District Capital LLC",
-    "Aventura Properties Trust",
-];
-
-const FIRST_NAMES = ["Carlos", "Maria", "Jorge", "Ana", "Roberto", "Isabella", "Miguel", "Sofia"];
-const LAST_NAMES = ["Rodriguez", "Martinez", "Lopez", "Garcia", "Hernandez", "Perez", "Gonzalez", "Diaz"];
-
-function hashPropertyId(id: string): number {
-    return id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-}
-
-function generateOwnerData(property: Property) {
-    const hash = hashPropertyId(property.id);
-    const isLLC = hash % 3 !== 0;
-    const name = isLLC
-        ? LLC_NAMES[hash % LLC_NAMES.length]
-        : `${FIRST_NAMES[hash % FIRST_NAMES.length]} ${LAST_NAMES[(hash + 3) % LAST_NAMES.length]}`;
-
-    const areaCode = ["305", "786", "954"][hash % 3];
-    const emailDomain = ["gmail.com", "outlook.com", "yahoo.com"][hash % 3];
-    const firstName = FIRST_NAMES[hash % FIRST_NAMES.length];
-
-    return {
-        name,
-        type: isLLC ? "LLC" : "Individual",
-        phone: `+1 ${areaCode} *** ****`,
-        email: `${firstName.toLowerCase().slice(0, 3)}***@${emailDomain}`,
-        registered: `${2005 + (hash % 18)}`,
-    };
-}
 
 // --- Sub-components ---
 
@@ -74,10 +33,12 @@ function HeroImage({ property }: { property: Property }) {
     return (
         <div className="relative w-full h-56 bg-dark-800">
             {showPhoto ? (
-                <img
+                <Image
                     src={property.primary_photo}
                     alt={property.formatted_address}
-                    className="w-full h-full object-cover"
+                    fill
+                    sizes="(max-width: 640px) 100vw, 480px"
+                    className="object-cover"
                     onError={() => setImgError(true)}
                 />
             ) : (
@@ -101,7 +62,7 @@ const STAT_ITEMS = [
 ];
 
 function StatsGrid({ property }: { property: Property }) {
-    const baths = property.baths_full + property.baths_half * 0.5;
+    const baths = calculateBaths(property.baths_full, property.baths_half);
     const values: Record<string, string> = {
         beds: String(property.beds),
         baths: String(baths),
@@ -149,9 +110,18 @@ function LocationCard({ property }: { property: Property }) {
 }
 
 interface OwnerSectionProps {
-    owner: ReturnType<typeof generateOwnerData>;
+    owner: OwnerInfo;
     unlocked: boolean;
     onUnlock: () => void;
+}
+
+function maskPhone(phone: string): string {
+    return phone.replace(/\d{4}$/, "****");
+}
+
+function maskEmail(email: string): string {
+    const [local, domain] = email.split("@");
+    return `${local.slice(0, 3)}***@${domain}`;
 }
 
 function OwnerSection({ owner, unlocked, onUnlock }: OwnerSectionProps) {
@@ -188,9 +158,9 @@ function OwnerIdentity({ name, type }: { name: string; type: string }) {
     );
 }
 
-function ContactInfo({ owner, unlocked }: { owner: ReturnType<typeof generateOwnerData>; unlocked: boolean }) {
-    const phone = unlocked ? "+1 305 847 2195" : owner.phone;
-    const email = unlocked ? "contacto@empresa.com" : owner.email;
+function ContactInfo({ owner, unlocked }: { owner: OwnerInfo; unlocked: boolean }) {
+    const phone = unlocked ? owner.phone : maskPhone(owner.phone);
+    const email = unlocked ? owner.email : maskEmail(owner.email);
 
     return (
         <div className="space-y-3 pt-2">
@@ -229,10 +199,10 @@ function UnlockButton({ unlocked, onUnlock }: { unlocked: boolean; onUnlock: () 
 function ActionsFooter({ url }: { url?: string }) {
     return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="space-y-3 pt-2">
-            {url && (
+            {url && isSafeUrl(url) && (
                 <Button
                     variant="outline"
-                    onClick={() => window.open(url, "_blank")}
+                    onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
                     className="w-full bg-transparent border-[#00F0FF]/30 text-[#00F0FF] hover:bg-[#00F0FF]/10 hover:border-[#00F0FF]/50"
                 >
                     <ExternalLink className="w-4 h-4 mr-2" />
@@ -254,7 +224,7 @@ export function PropertyDetailSheet({ property, isOpen, onClose }: PropertyDetai
     const [unlocked, setUnlocked] = useState(false);
 
     const owner = useMemo(
-        () => (property ? generateOwnerData(property) : null),
+        () => (property ? generateOwnerInfo(property) : null),
         [property]
     );
 

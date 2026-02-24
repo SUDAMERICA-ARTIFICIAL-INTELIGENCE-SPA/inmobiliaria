@@ -26,11 +26,11 @@ export function IntroSequence({ onComplete }: IntroSequenceProps) {
 
     useEffect(() => {
         // Show terminal lines progressively
-        TERMINAL_LINES.forEach((line, index) => {
+        const lineTimers = TERMINAL_LINES.map((line, index) =>
             setTimeout(() => {
                 setVisibleLines(index + 1);
-            }, line.delay);
-        });
+            }, line.delay)
+        );
 
         // Animate progress bar
         const progressInterval = setInterval(() => {
@@ -54,6 +54,7 @@ export function IntroSequence({ onComplete }: IntroSequenceProps) {
         }, 5600);
 
         return () => {
+            lineTimers.forEach(clearTimeout);
             clearInterval(progressInterval);
             clearTimeout(fadeTimer);
             clearTimeout(completeTimer);

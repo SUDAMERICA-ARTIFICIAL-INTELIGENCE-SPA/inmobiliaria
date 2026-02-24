@@ -1,10 +1,12 @@
 "use client";
 
 import { Property } from "@/lib/types";
+import { formatPrice, calculateBaths } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Bed, Bath, Ruler, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, memo, useCallback } from "react";
+import Image from "next/image";
 
 interface PropertyCardProps {
     property: Property;
@@ -13,10 +15,6 @@ interface PropertyCardProps {
 }
 
 // --- Helpers ---
-
-function formatPrice(value: number): string {
-    return `US$ ${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-}
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
     sold: { label: "VENDIDO", className: "bg-red-500/80 text-white" },
@@ -56,18 +54,19 @@ function PropertyImage({ src, alt }: { src: string | null; alt: string }) {
     if (!showImage) return <ImageFallback />;
 
     return (
-        <img
+        <Image
             src={src}
             alt={alt}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+            fill
+            sizes="(max-width: 768px) 100vw, 50vw"
+            className="object-cover group-hover:scale-110 transition-transform duration-700"
             onError={() => setHasError(true)}
-            loading="lazy"
         />
     );
 }
 
 function PropertySpecs({ property }: { property: Property }) {
-    const baths = property.baths_full + property.baths_half * 0.5;
+    const baths = calculateBaths(property.baths_full, property.baths_half);
 
     return (
         <div className="flex items-center gap-3 text-xs text-gray-400 mb-4 whitespace-nowrap overflow-hidden">
@@ -96,20 +95,24 @@ function PropertySpecs({ property }: { property: Property }) {
 
 // --- Main component ---
 
-export function PropertyCard({ property, onAnalyzeOwner, onHover }: PropertyCardProps) {
+export const PropertyCard = memo(function PropertyCard({ property, onAnalyzeOwner, onHover }: PropertyCardProps) {
     const statusInfo = getStatusLabel(property.status);
+
+    const handleMouseEnter = useCallback(() => onHover?.(property.id), [onHover, property.id]);
+    const handleMouseLeave = useCallback(() => onHover?.(null), [onHover]);
+    const handleClick = useCallback(() => onAnalyzeOwner(property), [onAnalyzeOwner, property]);
 
     return (
         <motion.div
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onMouseEnter={() => onHover?.(property.id)}
-            onMouseLeave={() => onHover?.(null)}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
             className="h-full"
         >
             <Card
-                className="glass-card overflow-hidden h-full flex flex-col group border-transparent hover:border-[#00F0FF]/50 transition-colors duration-300 cursor-pointer"
-                onClick={() => onAnalyzeOwner(property)}
+                className="glass-card overflow-hidden h-full flex flex-col group border-transparent hover:border-[#00F0FF]/50 transition-colors duration-300 cursor-pointer active:scale-[0.97] transition-transform"
+                onClick={handleClick}
             >
                 <div className="relative h-48 w-full bg-dark-800">
                     <PropertyImage src={property.primary_photo} alt={property.formatted_address} />
@@ -149,4 +152,4 @@ export function PropertyCard({ property, onAnalyzeOwner, onHover }: PropertyCard
             </Card>
         </motion.div>
     );
-}
+});

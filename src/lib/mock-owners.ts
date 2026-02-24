@@ -44,8 +44,7 @@ const MAILING_ADDRESSES = [
     "1395 Brickell Ave, Suite 800, Miami, FL 33131",
 ];
 
-function seededRandom(seed: string): () => number {
-    // Simple hash-based seeded random for consistency per property
+export function seededRandom(seed: string): () => number {
     let hash = 0;
     for (let i = 0; i < seed.length; i++) {
         const char = seed.charCodeAt(i);
@@ -60,42 +59,59 @@ function seededRandom(seed: string): () => number {
     };
 }
 
-export function generateOwnerInfo(property: Property): OwnerInfo {
-    const rng = seededRandom(property.id);
-    const isLLC = rng() > 0.4; // 60% chance LLC
+function pickOwnerIdentity(rng: () => number) {
+    const isLLC = rng() > 0.4;
     const isTrust = !isLLC && rng() > 0.5;
-
+    const type: OwnerInfo["type"] = isLLC ? "LLC" : isTrust ? "Trust" : "Individual";
     const name = isLLC
         ? LLC_NAMES[Math.floor(rng() * LLC_NAMES.length)]
         : INDIVIDUAL_NAMES[Math.floor(rng() * INDIVIDUAL_NAMES.length)];
+    return { name, type, isLLC };
+}
 
-    const type = isLLC ? "LLC" : isTrust ? "Trust" : "Individual";
-
-    const emailDomain = isLLC
-        ? name.toLowerCase().replace(/\s+/g, "").replace(/llc|inc|corp|co\./gi, "").slice(0, 15) + ".com"
-        : name.toLowerCase().split(" ")[0] + Math.floor(rng() * 99) + "@gmail.com";
-
-    const yearsAgo = Math.floor(rng() * 8) + 2; // 2-10 years ago
-    const acquisitionYear = new Date().getFullYear() - yearsAgo;
-    const acquisitionPrice = Math.floor(property.price * (0.55 + rng() * 0.3)); // 55-85% of current
-
-    const riskOptions: ("Low" | "Medium" | "High")[] = ["Low", "Medium", "High"];
-    const riskWeights = property.days_on_mls > 60 ? [0.1, 0.3, 0.6] : [0.5, 0.35, 0.15];
-    const riskRoll = rng();
-    let riskScore = riskOptions[0];
-    let cumulative = 0;
-    for (let i = 0; i < riskWeights.length; i++) {
-        cumulative += riskWeights[i];
-        if (riskRoll < cumulative) { riskScore = riskOptions[i]; break; }
+function generateEmail(name: string, isLLC: boolean, rng: () => number): string {
+    if (isLLC) {
+        const domain = name.toLowerCase().replace(/\s+/g, "").replace(/llc|inc|corp|co\./gi, "").slice(0, 15) + ".com";
+        return `contact@${domain}`;
     }
+    return name.toLowerCase().split(" ")[0] + Math.floor(rng() * 99) + "@gmail.com";
+}
+
+function generateAcquisition(price: number, rng: () => number) {
+    const yearsAgo = Math.floor(rng() * 8) + 2;
+    const acquisitionYear = new Date().getFullYear() - yearsAgo;
+    const acquisitionPrice = Math.floor(price * (0.55 + rng() * 0.3));
+    const month = String(Math.floor(rng() * 12) + 1).padStart(2, "0");
+    const day = String(Math.floor(rng() * 28) + 1).padStart(2, "0");
+    return { acquisitionPrice, acquisitionDate: `${acquisitionYear}-${month}-${day}` };
+}
+
+export function weightedPick<T>(options: T[], weights: number[], roll: number): T {
+    let cumulative = 0;
+    for (let i = 0; i < weights.length; i++) {
+        cumulative += weights[i];
+        if (roll < cumulative) return options[i];
+    }
+    return options[0];
+}
+
+export function generateOwnerInfo(property: Property): OwnerInfo {
+    const rng = seededRandom(property.id);
+    const { name, type, isLLC } = pickOwnerIdentity(rng);
+    const email = generateEmail(name, isLLC, rng);
+    const { acquisitionPrice, acquisitionDate } = generateAcquisition(property.price, rng);
+
+    const riskOptions: OwnerInfo["riskScore"][] = ["Low", "Medium", "High"];
+    const riskWeights = property.days_on_mls > 60 ? [0.1, 0.3, 0.6] : [0.5, 0.35, 0.15];
+    const riskScore = weightedPick(riskOptions, riskWeights, rng());
 
     return {
         name,
         type,
-        email: isLLC ? `contact@${emailDomain}` : emailDomain,
+        email,
         phone: `(305) ${String(Math.floor(rng() * 900) + 100)}-${String(Math.floor(rng() * 9000) + 1000)}`,
         mailingAddress: MAILING_ADDRESSES[Math.floor(rng() * MAILING_ADDRESSES.length)],
-        acquisitionDate: `${acquisitionYear}-${String(Math.floor(rng() * 12) + 1).padStart(2, "0")}-${String(Math.floor(rng() * 28) + 1).padStart(2, "0")}`,
+        acquisitionDate,
         acquisitionPrice,
         estimatedEquity: property.price - acquisitionPrice,
         linkedProperties: Math.floor(rng() * 7) + 1,
