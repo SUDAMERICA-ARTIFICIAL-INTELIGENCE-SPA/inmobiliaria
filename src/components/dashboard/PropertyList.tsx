@@ -13,45 +13,54 @@ interface PropertyListProps {
     onHover: (id: string | null) => void;
 }
 
+// --- Helpers ---
+
+type SortComparator = (a: Property, b: Property) => number;
+
+const SORT_COMPARATORS: Record<string, SortComparator> = {
+    price_asc: (a, b) => a.price - b.price,
+    price_desc: (a, b) => b.price - a.price,
+    sqft_desc: (a, b) => b.sqft - a.sqft,
+    newest: (a, b) => new Date(b.list_date).getTime() - new Date(a.list_date).getTime(),
+};
+
+function matchesSearch(property: Property, query: string): boolean {
+    const q = query.toLowerCase();
+    return (
+        property.formatted_address.toLowerCase().includes(q) ||
+        property.city?.toLowerCase().includes(q) ||
+        property.zip_code?.includes(q) ||
+        property.street?.toLowerCase().includes(q)
+    );
+}
+
+// --- Sub-components ---
+
+function EmptyState() {
+    return (
+        <div className="col-span-full py-20 text-center text-gray-500">
+            <p>No se encontraron propiedades con ese criterio.</p>
+        </div>
+    );
+}
+
+// --- Main component ---
+
 export function PropertyList({ properties, onAnalyzeOwner, onHover }: PropertyListProps) {
     const [search, setSearch] = useState("");
     const [sort, setSort] = useState("price_desc");
 
     const filtered = useMemo(() => {
-        let result = [...properties];
+        const searched = search
+            ? properties.filter((p) => matchesSearch(p, search))
+            : properties;
 
-        if (search) {
-            const q = search.toLowerCase();
-            result = result.filter(
-                (p) =>
-                    p.formatted_address.toLowerCase().includes(q) ||
-                    p.city?.toLowerCase().includes(q) ||
-                    p.zip_code?.includes(q) ||
-                    p.street?.toLowerCase().includes(q)
-            );
-        }
-
-        switch (sort) {
-            case "price_asc":
-                result.sort((a, b) => a.price - b.price);
-                break;
-            case "price_desc":
-                result.sort((a, b) => b.price - a.price);
-                break;
-            case "sqft_desc":
-                result.sort((a, b) => b.sqft - a.sqft);
-                break;
-            case "newest":
-                result.sort((a, b) => (new Date(b.list_date).getTime() || 0) - (new Date(a.list_date).getTime() || 0));
-                break;
-        }
-
-        return result;
+        const comparator = SORT_COMPARATORS[sort];
+        return comparator ? [...searched].sort(comparator) : searched;
     }, [properties, search, sort]);
 
     return (
         <div className="h-full flex flex-col glass-card border-none bg-black/20">
-            {/* Filtros */}
             <div className="p-4 space-y-3 border-b border-white/5 sticky top-0 bg-dark-900/95 backdrop-blur-md z-10">
                 <div className="flex gap-3">
                     <div className="relative flex-grow">
@@ -81,24 +90,17 @@ export function PropertyList({ properties, onAnalyzeOwner, onHover }: PropertyLi
                 </div>
             </div>
 
-            {/* Grid */}
             <div className="flex-grow overflow-y-auto p-4 custom-scrollbar">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filtered.map((property, index) => (
-                        <div key={`${property.id}-${index}`} className="h-full">
-                            <PropertyCard
-                                property={property}
-                                onAnalyzeOwner={onAnalyzeOwner}
-                                onHover={onHover}
-                            />
-                        </div>
+                    {filtered.map((property) => (
+                        <PropertyCard
+                            key={property.id}
+                            property={property}
+                            onAnalyzeOwner={onAnalyzeOwner}
+                            onHover={onHover}
+                        />
                     ))}
-
-                    {filtered.length === 0 && (
-                        <div className="col-span-full py-20 text-center text-gray-500">
-                            <p>No se encontraron propiedades con ese criterio.</p>
-                        </div>
-                    )}
+                    {filtered.length === 0 && <EmptyState />}
                 </div>
             </div>
         </div>
